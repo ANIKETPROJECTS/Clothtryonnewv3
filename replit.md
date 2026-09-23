@@ -90,3 +90,9 @@ Routes are defined in `shared/routes.ts` with Zod schemas for input validation:
 - Camera permissions required for AR functionality
 - Modern browser with WebRTC support
 - PostgreSQL database instance
+
+## Running on Replit
+
+The project uses the existing **Start application** workflow (`npm run dev`), which serves the React client and Express API together on port 5000. Dependencies are installed from `package-lock.json`. The Replit development PostgreSQL database supplies `DATABASE_URL` automatically; do not add a connection string to the repository. After setting up a fresh development database, run `npm run db:push` once to create the tables before using the saved looks or products APIs.
+
+Open the web preview to use the app. The live try-on page requires browser camera permission and a working webcam; its pose model loads from the MediaPipe CDN, so internet access is needed for that feature.
