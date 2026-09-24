@@ -1,19 +1,18 @@
-import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import { defineConfig } from "drizzle-kit";
 
-if (existsSync(".env")) {
-  process.loadEnvFile(".env");
-}
-
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL, ensure the database is provisioned");
-}
+const require = createRequire(import.meta.url);
+const databaseUrl =
+  (process.env.REPL_ID && process.env.DATABASE_URL) ||
+  (require("./ecosystem.config.cjs") as {
+    apps: { env: { DATABASE_URL: string } }[];
+  }).apps[0].env.DATABASE_URL;
 
 export default defineConfig({
   out: "./migrations",
   schema: "./shared/schema.ts",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL,
+    url: databaseUrl,
   },
 });

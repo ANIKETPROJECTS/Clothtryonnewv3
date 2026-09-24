@@ -99,15 +99,16 @@ Open the web preview to use the app. The live try-on page requires browser camer
 
 ## VPS Deployment (PM2 + Nginx)
 
-The production server listens on port `3021` by default. `ecosystem.config.cjs` starts the built app with PM2 on that port and binds it to `127.0.0.1`, so it is only reachable locally and should be exposed through Nginx. It loads `DATABASE_URL` from a local `.env` file using Node's built-in env-file support. Do not commit `.env`; `.env.example` is a template. The current server does not use `SESSION_SECRET`.
+The production server listens on port `3021` by default. `ecosystem.config.cjs` starts the built app with PM2 on that port and binds it to `127.0.0.1`, so it is only reachable locally and should be exposed through Nginx. Set the VPS PostgreSQL connection string in `ecosystem.config.cjs`; both PM2 and `npm run db:push` read it from there. URL-encode special characters in the username or password. Protect this file after entering real credentials and do not commit or share the credential-bearing version. The current server does not use `SESSION_SECRET`.
 
 Requirements: Node.js 20.19+ (or 22.12+), npm, PM2, PostgreSQL, and Nginx. From the project directory on the VPS:
 
-1. Copy `.env.example` to `.env`; set `DATABASE_URL` to the VPS PostgreSQL connection and restrict `.env` permissions (`chmod 600 .env`).
-2. Run `npm install` and `npm run build`.
-3. Create the database tables once with `npm run db:push`. Drizzle reads the same `.env` file. Review the schema before applying changes to a database containing important data.
-4. Start the process with `pm2 start ecosystem.config.cjs`, then persist the PM2 process list with `pm2 save`. Configure PM2's startup service with `pm2 startup` and run the command it prints.
-5. Install `deploy/nginx/arvr.airavatatechnologies.com.conf` under `/etc/nginx/sites-available/`, enable it in `/etc/nginx/sites-enabled/`, run `sudo nginx -t`, and reload Nginx.
-6. Point the domain's DNS A record (and any AAAA record, if used) to the VPS. Allow inbound ports 80 and 443 in the VPS firewall. Once DNS resolves, run `sudo certbot --nginx -d arvr.airavatatechnologies.com` to issue and install HTTPS.
+1. Edit `ecosystem.config.cjs` and replace the marked PostgreSQL connection string with the VPS database URL.
+2. Run `npm install`.
+3. Create the database tables once with `npm run db:push`. It reads the same connection string as PM2. Review the schema before applying changes to a database containing important data.
+4. Run `npm run build`.
+5. Start the process with `pm2 start ecosystem.config.cjs`, then configure PM2's startup service with `pm2 startup` and run the command it prints. Finish with `pm2 save`.
+6. Install `deploy/nginx/arvr.airavatatechnologies.com.conf` under `/etc/nginx/sites-available/`, enable it in `/etc/nginx/sites-enabled/`, run `sudo nginx -t`, and reload Nginx.
+7. Point the domain's DNS A record (and any AAAA record, if used) to the VPS. Allow inbound ports 80 and 443 in the VPS firewall. Once DNS resolves, run `sudo certbot --nginx -d arvr.airavatatechnologies.com` to issue and install HTTPS.
 
 Verification on the VPS: `pm2 status` should show `v-tryon` online; `curl -I http://127.0.0.1:3021/` should return HTTP 200; after DNS and Certbot, `curl -I https://arvr.airavatatechnologies.com/` should return HTTP 200. Do not expose port 3021 publicly.
