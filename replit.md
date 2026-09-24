@@ -32,9 +32,9 @@ Preferred communication style: Simple, everyday language.
 - **Build**: esbuild for server bundling, Vite for client
 
 ### Data Storage
-- **Database**: PostgreSQL via Drizzle ORM
-- **Schema Location**: `shared/schema.ts` - shared between client and server
-- **Migrations**: Managed via Drizzle Kit (`drizzle-kit push`)
+- **Persistence**: Local JSON file at `data/app-data.json`; created automatically on first API access.
+- **Scope**: Saved looks and product records are stored on the same filesystem as the app. No database service or database URL is required.
+- **Writes**: Updates are serialized and written through a temporary file before atomic rename. Run one PM2 app instance and back up this file.
 
 ### Project Structure
 ```
@@ -45,14 +45,12 @@ Preferred communication style: Simple, everyday language.
 │       ├── lib/          # Utility functions
 │       └── pages/        # Route pages (LandingPage, Home, not-found)
 ├── server/           # Express backend
-│   ├── db.ts         # Database connection
 │   ├── routes.ts     # API route handlers
-│   ├── storage.ts    # Data access layer
+│   ├── storage.ts    # JSON-file data access layer
 │   └── static.ts     # Static file serving
 ├── shared/           # Shared code between client/server
-│   ├── schema.ts     # Drizzle database schema
+│   ├── schema.ts     # Shared data types and request validation
 │   └── routes.ts     # API route definitions with Zod validation
-└── migrations/       # Database migrations
 ```
 
 ### API Design
@@ -62,16 +60,16 @@ Routes are defined in `shared/routes.ts` with Zod schemas for input validation:
 - `DELETE /api/looks/:id` - Delete a saved look
 
 ### Key Design Decisions
-1. **Shared Schema**: Database schema and API types are shared between frontend and backend for type safety
+1. **Project-local persistence**: Runtime records are stored in `data/app-data.json` with no external database dependency.
 2. **MediaPipe CDN Loading**: Pose detection models load from CDN at runtime (large files)
 3. **Canvas-based Rendering**: T-shirt overlay uses HTML5 Canvas for real-time image manipulation
 4. **Storage Abstraction**: `IStorage` interface allows swapping storage implementations
 
 ## External Dependencies
 
-### Database
-- **PostgreSQL**: Primary database, connection via `DATABASE_URL` environment variable
-- **Drizzle ORM**: Type-safe database queries with `drizzle-orm/node-postgres`
+### Persistence
+- The application creates `data/app-data.json` when the API first reads or writes data.
+- Keep this file on persistent VPS storage and include it in backups. Do not run multiple PM2 instances against this JSON store.
 
 ### Frontend Libraries
 - **MediaPipe**: Google's ML framework for pose detection (loaded from CDN)
@@ -84,31 +82,26 @@ Routes are defined in `shared/routes.ts` with Zod schemas for input validation:
 ### Build Tools
 - **Vite**: Frontend development server and bundler
 - **esbuild**: Server-side bundling for production
-- **Drizzle Kit**: Database schema migrations
 
 ### Runtime Requirements
 - Camera permissions required for AR functionality
 - Modern browser with WebRTC support
-- PostgreSQL database instance
 
 ## Running on Replit
 
-The project uses the existing **Start application** workflow (`npm run dev`), which serves the React client and Express API together on port 5000. Dependencies are installed from `package-lock.json`. The Replit development PostgreSQL database supplies `DATABASE_URL` automatically; do not add a connection string to the repository. After setting up a fresh development database, run `npm run db:push` once to create the tables before using the saved looks or products APIs.
+The project uses the existing **Start application** workflow (`npm run dev`), which serves the React client and Express API together on port 5000. Dependencies are installed from `package-lock.json`. The first request to a data API creates `data/app-data.json`; no database setup or connection URL is needed. This runtime data file is excluded from Git to avoid checking saved images into source control.
 
 Open the web preview to use the app. The live try-on page requires browser camera permission and a working webcam; its pose model loads from the MediaPipe CDN, so internet access is needed for that feature.
 
 ## VPS Deployment (PM2 + Nginx)
 
-The production server listens on port `3021` by default. `ecosystem.config.cjs` starts the built app with PM2 on that port and binds it to `127.0.0.1`, so it is only reachable locally and should be exposed through Nginx. Set the VPS PostgreSQL connection string in `ecosystem.config.cjs`; both PM2 and `npm run db:push` read it from there. URL-encode special characters in the username or password. Protect this file after entering real credentials and do not commit or share the credential-bearing version. The current server does not use `SESSION_SECRET`.
+The production server listens on port `3021` by default. `ecosystem.config.cjs` starts the built app with PM2 on that port and binds it to `127.0.0.1`, so it is only reachable locally and should be exposed through Nginx. There are no database credentials or connection URL to configure. App records are stored in `data/app-data.json`; keep that file on persistent VPS storage and back it up. Use one PM2 instance.
 
-Requirements: Node.js 20.19+ (or 22.12+), npm, PM2, PostgreSQL, and Nginx. From the project directory on the VPS:
+Requirements: Node.js 20.19+ (or 22.12+), npm, PM2, and Nginx. From the project directory on the VPS:
 
-1. Edit `ecosystem.config.cjs` and replace the marked PostgreSQL connection string with the VPS database URL.
-2. Run `npm install`.
-3. Create the database tables once with `npm run db:push`. It reads the same connection string as PM2. Review the schema before applying changes to a database containing important data.
-4. Run `npm run build`.
-5. Start the process with `pm2 start ecosystem.config.cjs`, then configure PM2's startup service with `pm2 startup` and run the command it prints. Finish with `pm2 save`.
-6. Install `deploy/nginx/arvr.airavatatechnologies.com.conf` under `/etc/nginx/sites-available/`, enable it in `/etc/nginx/sites-enabled/`, run `sudo nginx -t`, and reload Nginx.
-7. Point the domain's DNS A record (and any AAAA record, if used) to the VPS. Allow inbound ports 80 and 443 in the VPS firewall. Once DNS resolves, run `sudo certbot --nginx -d arvr.airavatatechnologies.com` to issue and install HTTPS.
+1. Run `npm install` and `npm run build`.
+2. Start the process with `pm2 start ecosystem.config.cjs`, then configure PM2's startup service with `pm2 startup` and run the command it prints. Finish with `pm2 save`.
+3. Install `deploy/nginx/arvr.airavatatechnologies.com.conf` under `/etc/nginx/sites-available/`, enable it in `/etc/nginx/sites-enabled/`, run `sudo nginx -t`, and reload Nginx.
+4. Point the domain's DNS A record (and any AAAA record, if used) to the VPS. Allow inbound ports 80 and 443 in the VPS firewall. Once DNS resolves, run `sudo certbot --nginx -d arvr.airavatatechnologies.com` to issue and install HTTPS.
 
 Verification on the VPS: `pm2 status` should show `v-tryon` online; `curl -I http://127.0.0.1:3021/` should return HTTP 200; after DNS and Certbot, `curl -I https://arvr.airavatatechnologies.com/` should return HTTP 200. Do not expose port 3021 publicly.

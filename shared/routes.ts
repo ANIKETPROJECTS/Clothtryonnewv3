@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { insertSavedLookSchema, savedLooks, products } from './schema';
+import {
+  insertSavedLookSchema,
+  type SavedLook,
+  type Product,
+} from './schema';
 
 export const api = {
   looks: {
@@ -7,7 +11,7 @@ export const api = {
       method: 'GET' as const,
       path: '/api/looks',
       responses: {
-        200: z.array(z.custom<typeof savedLooks.$inferSelect>()),
+          200: z.array(z.custom<SavedLook>()),
       },
     },
     create: {
@@ -15,7 +19,7 @@ export const api = {
       path: '/api/looks',
       input: insertSavedLookSchema,
       responses: {
-        201: z.custom<typeof savedLooks.$inferSelect>(),
+        201: z.custom<SavedLook>(),
       },
     },
     delete: {
@@ -31,7 +35,7 @@ export const api = {
       method: 'GET' as const,
       path: '/api/products',
       responses: {
-        200: z.array(z.custom<typeof products.$inferSelect>()),
+        200: z.array(z.custom<Product>()),
       },
     },
   },
