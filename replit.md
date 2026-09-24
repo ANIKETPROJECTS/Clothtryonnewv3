@@ -96,3 +96,18 @@ Routes are defined in `shared/routes.ts` with Zod schemas for input validation:
 The project uses the existing **Start application** workflow (`npm run dev`), which serves the React client and Express API together on port 5000. Dependencies are installed from `package-lock.json`. The Replit development PostgreSQL database supplies `DATABASE_URL` automatically; do not add a connection string to the repository. After setting up a fresh development database, run `npm run db:push` once to create the tables before using the saved looks or products APIs.
 
 Open the web preview to use the app. The live try-on page requires browser camera permission and a working webcam; its pose model loads from the MediaPipe CDN, so internet access is needed for that feature.
+
+## VPS Deployment (PM2 + Nginx)
+
+The production server listens on port `3021` by default. `ecosystem.config.cjs` starts the built app with PM2 on that port and binds it to `127.0.0.1`, so it is only reachable locally and should be exposed through Nginx. It loads `DATABASE_URL` from a local `.env` file using Node's built-in env-file support. Do not commit `.env`; `.env.example` is a template. The current server does not use `SESSION_SECRET`.
+
+Requirements: Node.js 20.19+ (or 22.12+), npm, PM2, PostgreSQL, and Nginx. From the project directory on the VPS:
+
+1. Copy `.env.example` to `.env`; set `DATABASE_URL` to the VPS PostgreSQL connection and restrict `.env` permissions (`chmod 600 .env`).
+2. Run `npm install` and `npm run build`.
+3. Create the database tables once with `npm run db:push`. Drizzle reads the same `.env` file. Review the schema before applying changes to a database containing important data.
+4. Start the process with `pm2 start ecosystem.config.cjs`, then persist the PM2 process list with `pm2 save`. Configure PM2's startup service with `pm2 startup` and run the command it prints.
+5. Install `deploy/nginx/arvr.airavatatechnologies.com.conf` under `/etc/nginx/sites-available/`, enable it in `/etc/nginx/sites-enabled/`, run `sudo nginx -t`, and reload Nginx.
+6. Point the domain's DNS A record (and any AAAA record, if used) to the VPS. Allow inbound ports 80 and 443 in the VPS firewall. Once DNS resolves, run `sudo certbot --nginx -d arvr.airavatatechnologies.com` to issue and install HTTPS.
+
+Verification on the VPS: `pm2 status` should show `v-tryon` online; `curl -I http://127.0.0.1:3021/` should return HTTP 200; after DNS and Certbot, `curl -I https://arvr.airavatatechnologies.com/` should return HTTP 200. Do not expose port 3021 publicly.
